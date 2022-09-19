@@ -574,15 +574,15 @@ class Client:
         from pathlib import Path
         path = Path(os.path.abspath(__file__))
         if sys.platform.startswith("linux"):
-          return os.realpath(str(path.parent.parent) + "/bin" + "/linux64/nk")
+          return os.path.realpath(str(path.parent.parent) + "/bin" + "/linux64/nk")
         elif sys.platform == "darwin":
-            return os.realpath(str(path.parent.parent) + "/bin" + "/mac64/nk")
+            return os.path.realpath(str(path.parent.parent) + "/bin" + "/mac64/nk")
         elif sys.platform == "win32":
-            return os.realpath(str(path.parent.parent) + "/bin" + "/win64/nk.exe")
+            return os.path.realpath(str(path.parent.parent) + "/bin" + "/win64/nk.exe")
         else:
             raise Exception("Unidentified operating system")
 
-    def getPublicKey(self):
+    def fromSeed(self):
         import subprocess
         nk =   self.getNkeysBin()
         print("nk:", nk)
