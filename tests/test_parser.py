@@ -1,12 +1,15 @@
+import asyncio
 import sys
 import unittest
-import asyncio
+
 from nats.aio.client import Subscription
+from nats.errors import ProtocolError
 from nats.protocol.parser import *
-from tests.utils import NatsTestCase, async_test
+from tests.utils import async_test
 
 
 class MockNatsClient:
+
     def __init__(self):
         self._subs = {}
         self._pongs = []
@@ -24,9 +27,9 @@ class MockNatsClient:
     async def _process_ping(self):
         pass
 
-    async def _process_msg(self, sid, subject, reply, payload):
+    async def _process_msg(self, sid, subject, reply, payload, headers=None):
         sub = self._subs[sid]
-        await sub.cb(sid, subject, reply, payload)
+        await sub._cb(sid, subject, reply, payload)
 
     async def _process_err(self, err=None):
         pass
@@ -35,9 +38,9 @@ class MockNatsClient:
         self._server_info = info
 
 
-class ProtocolParserTest(NatsTestCase):
+class ProtocolParserTest(unittest.TestCase):
+
     def setUp(self):
-        super().setUp()
         self.loop = asyncio.new_event_loop()
 
     @async_test
@@ -78,7 +81,7 @@ class ProtocolParserTest(NatsTestCase):
             "cb": payload_test,
             "future": None,
         }
-        sub = Subscription(**params)
+        sub = Subscription(nc, 1, **params)
         nc._subs[1] = sub
         ps = Parser(nc)
         data = b'MSG hello 1 world 12\r\n'
@@ -129,7 +132,7 @@ class ProtocolParserTest(NatsTestCase):
     async def test_parse_split_msg_op_wrong_args(self):
         ps = Parser(MockNatsClient())
         data = b'MSG PONG\r\n'
-        with self.assertRaises(ErrProtocol):
+        with self.assertRaises(ProtocolError):
             await ps.parse(data)
 
     @async_test
@@ -158,7 +161,7 @@ class ProtocolParserTest(NatsTestCase):
         nc = MockNatsClient()
         ps = Parser(nc)
         server_id = 'A' * 2048
-        data = '''INFO {"server_id": "%s", "max_payload": 100, "auth_required": false, "connect_urls":["127.0.0.0.1:4223"]}\r\n''' % server_id
+        data = f'INFO {{"server_id": "{server_id}", "max_payload": 100, "auth_required": false, "connect_urls":["127.0.0.0.1:4223"]}}\r\n'
         await ps.parse(data.encode())
         self.assertEqual(len(ps.buf), 0)
         self.assertEqual(ps.state, AWAITING_CONTROL_LINE)
@@ -180,18 +183,18 @@ class ProtocolParserTest(NatsTestCase):
             "cb": payload_test,
             "future": None,
         }
-        sub = Subscription(**params)
+        sub = Subscription(nc, 1, **params)
         nc._subs[1] = sub
 
         ps = Parser(nc)
         reply = 'A' * 2043
-        data = '''PING\r\nMSG hello 1 %s''' % reply
+        data = f'PING\r\nMSG hello 1 {reply}'
         await ps.parse(data.encode())
-        await ps.parse(b'''AAAAA 0\r\n\r\nMSG hello 1 world 0''')
+        await ps.parse(b'AAAAA 0\r\n\r\nMSG hello 1 world 0')
         self.assertEqual(msgs, 1)
         self.assertEqual(len(ps.buf), 19)
         self.assertEqual(ps.state, AWAITING_CONTROL_LINE)
-        await ps.parse(b'''\r\n\r\n''')
+        await ps.parse(b'\r\n\r\n')
         self.assertEqual(msgs, 2)
 
     @async_test
@@ -210,7 +213,7 @@ class ProtocolParserTest(NatsTestCase):
             "cb": payload_test,
             "future": None,
         }
-        sub = Subscription(**params)
+        sub = Subscription(nc, 1, **params)
         nc._subs[1] = sub
 
         ps = Parser(nc)
@@ -219,14 +222,9 @@ class ProtocolParserTest(NatsTestCase):
         # FIXME: Malformed long protocol lines will not be detected
         # by the client, so we rely on the ping/pong interval
         # from the client to give up instead.
-        data = '''PING\r\nWRONG hello 1 %s''' % reply
+        data = f'PING\r\nWRONG hello 1 {reply}'
         await ps.parse(data.encode())
-        await ps.parse(b'''AAAAA 0''')
+        await ps.parse(b'AAAAA 0')
         self.assertEqual(ps.state, AWAITING_CONTROL_LINE)
-        await ps.parse(b'''\r\n\r\n''')
-        await ps.parse(b'''\r\n\r\n''')
-
-
-if __name__ == '__main__':
-    runner = unittest.TextTestRunner(stream=sys.stdout)
-    unittest.main(verbosity=2, exit=False, testRunner=runner)
+        await ps.parse(b'\r\n\r\n')
+        await ps.parse(b'\r\n\r\n')

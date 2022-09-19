@@ -1,4 +1,4 @@
-# Copyright 2018 The NATS Authors
+# Copyright 2018-2021 The NATS Authors
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -14,12 +14,13 @@
 
 import sys
 import unittest
-from nats.aio.nuid import NUID, MAX_SEQ, PREFIX_LENGTH, TOTAL_LENGTH
-from tests.utils import NatsTestCase
 from collections import Counter
 
+from nats.nuid import BASE, MAX_SEQ, NUID, PREFIX_LENGTH, TOTAL_LENGTH
 
-class NUIDTest(NatsTestCase):
+
+class NUIDTest(unittest.TestCase):
+
     def setUp(self):
         super().setUp()
 
@@ -45,6 +46,15 @@ class NUIDTest(NatsTestCase):
         ]
         self.assertEqual(len(repeated), 0)
 
+    def test_subsequent_nuid_equal(self):
+        n_tests = 10000
+        for i in range(n_tests):
+            nuid = NUID()
+            nuid._seq = MAX_SEQ - i - 10
+            nuid._inc = BASE
+
+            self.assertTrue(nuid.next() != nuid.next())
+
     def test_nuid_sequence_rollover(self):
         nuid = NUID()
         seq_a = nuid._seq
@@ -62,8 +72,3 @@ class NUIDTest(NatsTestCase):
         nuid._seq = seq_c = MAX_SEQ + 1
         nuid_c = nuid.next()
         self.assertNotEqual(nuid_a[:PREFIX_LENGTH], nuid_c[:PREFIX_LENGTH])
-
-
-if __name__ == '__main__':
-    runner = unittest.TextTestRunner(stream=sys.stdout)
-    unittest.main(verbosity=2, exit=False, testRunner=runner)

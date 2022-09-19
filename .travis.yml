@@ -5,13 +5,12 @@ cache:
   - $HOME/nats-server
 
 python:
-  - "3.6"
-  - "3.7"
   - "3.8"
-  - "3.9-dev"
+  - "3.9"
+  - "3.10"
 
 before_install:
-  - bash ./script/install_nats.sh
+  - bash ./scripts/install_nats.sh
 
 before_script:
   - export PATH=$HOME/nats-server:$PATH
@@ -26,15 +25,16 @@ notifications:
   email: false
 
 sudo: true
-dist: xenial
+dist: focal
 
 jobs:
   include:
-  - name: "Python: 3.8/uvloop"
-    python: "3.8"
+  - name: "Python: 3.9/uvloop"
+    python: "3.9"
     install:
       - pip install uvloop
   allow_failures:
-    python:
-      - "3.6"
-      - "3.9-dev"
+    - python:
+      - "3.8"
+      - "3.9"
+      - "Python: 3.9/uvloop"

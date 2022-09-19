@@ -12,18 +12,19 @@
 # limitations under the License.
 #
 
-from random import Random, SystemRandom
+from random import Random
 from sys import maxsize as MaxInt
+from secrets import token_bytes, randbelow
 
 DIGITS = b'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 BASE = 62
 PREFIX_LENGTH = 12
 SEQ_LENGTH = 10
-TOTAL_LENGTH = PREFIX_LENGTH + SEQ_LENGTH
-MAX_SEQ = BASE**10
+MAX_SEQ = 839299365868340224  # BASE**10
 MIN_INC = 33
 MAX_INC = 333
 INC = MAX_INC - MIN_INC
+TOTAL_LENGTH = PREFIX_LENGTH + SEQ_LENGTH
 
 
 class NUID:
@@ -32,38 +33,36 @@ class NUID:
     unique identifiers used for inboxes in NATS.
     """
 
-    def __init__(self):
-        self._srand = SystemRandom()
-        self._prand = Random(self._srand.randint(0, MaxInt))
+    def __init__(self) -> None:
+        self._prand = Random(randbelow(MaxInt))
         self._seq = self._prand.randint(0, MAX_SEQ)
-        self._inc = MIN_INC + self._prand.randint(0, INC)
-        self._prefix = b''
+        self._inc = MIN_INC + self._prand.randint(BASE + 1, INC)
+        self._prefix = bytearray()
         self.randomize_prefix()
 
-    def next(self):
+    def next(self) -> bytearray:
+        """
+        next returns the next unique identifier.
+        """
         self._seq += self._inc
         if self._seq >= MAX_SEQ:
             self.randomize_prefix()
             self.reset_sequential()
+
         l = self._seq
         prefix = self._prefix[:]
+        suffix = bytearray(SEQ_LENGTH)
+        for i in reversed(range(SEQ_LENGTH)):
+            suffix[i] = DIGITS[int(l) % BASE]
+            l //= BASE
 
-        def _next():
-            nonlocal l
-            a = DIGITS[int(l) % BASE]
-            l /= BASE
-            return a
-
-        suffix = bytearray(_next() for i in range(SEQ_LENGTH))
         prefix.extend(suffix)
         return prefix
 
-    def randomize_prefix(self):
-        random_bytes = (
-            self._srand.getrandbits(8) for i in range(PREFIX_LENGTH)
-        )
+    def randomize_prefix(self) -> None:
+        random_bytes = token_bytes(PREFIX_LENGTH)
         self._prefix = bytearray(DIGITS[c % BASE] for c in random_bytes)
 
-    def reset_sequential(self):
+    def reset_sequential(self) -> None:
         self._seq = self._prand.randint(0, MAX_SEQ)
         self._inc = MIN_INC + self._prand.randint(0, INC)
