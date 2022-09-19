@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 # These are here for GitHub's dependency graph.
 setup(
     name='nats-py',
-    version='1.0.0',
+    version='2.2.0',
     description='Nats using nkeys binary built from nkeys go project',
     packages=find_packages(),
     package_data={'': ['bin/win64/nk.exe','bin/linux64/nk','bin/mac64/nk']},
