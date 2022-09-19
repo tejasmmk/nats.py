@@ -517,19 +517,9 @@ class Client:
             self._user_jwt_cb = user_cb
 
             def sig_cb(nonce: str) -> bytes:
-                seed = None
-                with open(creds[1], 'rb') as f:
-                    seed = bytearray(os.fstat(f.fileno()).st_size)
-                    f.readinto(seed)  # type: ignore[attr-defined]
-                kp = nkeys.from_seed(seed)
-                raw_signed = kp.sign(nonce.encode())
-                sig = base64.b64encode(raw_signed)
-
-                # Best effort attempt to clear from memory.
-                kp.wipe()
-                del kp
-                del seed
-                return sig
+                self._nkeys_seed =  creds[1]
+                self.fromSeed()
+                self._sign(nonce)
 
             self._signature_cb = sig_cb
         else:
@@ -570,16 +560,12 @@ class Client:
                             # into the pre allocated bytearray.
                             user_seed = bytearray(nkey_size)
                             f.readinto(user_seed)  # type: ignore[attr-defined]
-                kp = nkeys.from_seed(user_seed)
-                raw_signed = kp.sign(nonce.encode())
-                sig = base64.b64encode(raw_signed)
-
-                # Delete all state related to the keys.
-                kp.wipe()
-                del user_seed
-                del kp
-                return sig
-
+                f.close()
+                f = open(user_seed, "r")
+                self._nkeys_seed = f.read()
+                f.close()
+                self.fromSeed()
+                return self._sign(nonce)
             self._signature_cb = sig_cb
 
     def getNkeysBin(self):
@@ -605,7 +591,7 @@ class Client:
         out, err = p.communicate()
         publicKey = out.decode().strip()
         print("Public key using exe",publicKey)
-        return  publicKey
+        self._public_nkey = publicKey
 
     def _sign(self, nonce):
         import tempfile
@@ -633,28 +619,7 @@ class Client:
         return sign
     def _setup_nkeys_seed_connect(self) -> None:
         assert self._nkeys_seed, "Client.connect must be called first"
-        import os
-
-        import nkeys
-
-        seed = None
-        creds = self._nkeys_seed
-
-        self._public_nkey =  self.getPublicKey()
-
-        # with open(creds, 'rb') as f:
-        #     seed = bytearray(os.fstat(f.fileno()).st_size)
-        #     f.readinto(seed)  # type: ignore[attr-defined]
-        # kp = nkeys.from_seed(seed)
-        #
-        # self._public_nkey = kp.public_key.decode()
-        # print("Public key using py", self._public_nkey )
-        # print(type(self._public_nkey))
-        # kp.wipe()
-        # del kp
-        # print(seed)
-
-
+        self.fromSeed()
         def sig_cb(nonce: str) -> bytes:
             print("Sign Callback")
             sig = self._sign(nonce)
