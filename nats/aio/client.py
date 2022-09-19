@@ -582,6 +582,55 @@ class Client:
 
             self._signature_cb = sig_cb
 
+    def getNkeysBin(self):
+        import sys
+        import os
+        from pathlib import Path
+        path = Path(os.path.abspath(__file__))
+        if sys.platform.startswith("linux"):
+          return os.realpath(str(path.parent.parent) + "/bin" + "/linux64/nk")
+        elif sys.platform == "darwin":
+            return os.realpath(str(path.parent.parent) + "/bin" + "/mac64/nk")
+        elif sys.platform == "win32":
+            return os.realpath(str(path.parent.parent) + "/bin" + "/win64/nk.exe")
+        else:
+            raise Exception("Unidentified operating system")
+
+    def getPublicKey(self):
+        import subprocess
+        nk =   self.getNkeysBin()
+        print("nk:", nk)
+        print("self._nkeys_seed:", self._nkeys_seed)
+        p = subprocess.Popen([nk, "-inkey", self._nkeys_seed, "-pubout"], stdout=subprocess.PIPE)
+        out, err = p.communicate()
+        publicKey = out.decode().strip()
+        print("Public key using exe",publicKey)
+        return  publicKey
+
+    def _sign(self, nonce):
+        import tempfile
+        tempDir = tempfile.gettempdir()  # prints the current temporary directory
+
+        f = open(tempDir + "/nonce.txt", "w")
+        f.write(nonce)
+        f.close()
+
+        import os, subprocess
+        from pathlib import Path
+
+        path = Path(os.path.abspath(__file__))
+        absPath = str(path.parent.parent)
+        nk = absPath + "/nk.exe"
+        print("nk:", nk)
+        print("self._nkeys_seed:", self._nkeys_seed)
+        command = os.path.realpath(nk) + " -sign " +  os.path.realpath(tempDir + "/nonce.txt") + " -inkey " +  os.path.realpath(self._nkeys_seed)
+        print(command)
+        p = subprocess.Popen(command, stdout=subprocess.PIPE)
+        out, err = p.communicate()
+        sign = out.decode().strip()
+        print("Signing using exe",sign)
+
+        return sign
     def _setup_nkeys_seed_connect(self) -> None:
         assert self._nkeys_seed, "Client.connect must be called first"
         import os
@@ -590,28 +639,25 @@ class Client:
 
         seed = None
         creds = self._nkeys_seed
-        with open(creds, 'rb') as f:
-            seed = bytearray(os.fstat(f.fileno()).st_size)
-            f.readinto(seed)  # type: ignore[attr-defined]
-        kp = nkeys.from_seed(seed)
-        self._public_nkey = kp.public_key.decode()
-        kp.wipe()
-        del kp
-        del seed
+
+        self._public_nkey =  self.getPublicKey()
+
+        # with open(creds, 'rb') as f:
+        #     seed = bytearray(os.fstat(f.fileno()).st_size)
+        #     f.readinto(seed)  # type: ignore[attr-defined]
+        # kp = nkeys.from_seed(seed)
+        #
+        # self._public_nkey = kp.public_key.decode()
+        # print("Public key using py", self._public_nkey )
+        # print(type(self._public_nkey))
+        # kp.wipe()
+        # del kp
+        # print(seed)
+
 
         def sig_cb(nonce: str) -> bytes:
-            seed = None
-            with open(creds, 'rb') as f:
-                seed = bytearray(os.fstat(f.fileno()).st_size)
-                f.readinto(seed)  # type: ignore[attr-defined]
-            kp = nkeys.from_seed(seed)
-            raw_signed = kp.sign(nonce.encode())
-            sig = base64.b64encode(raw_signed)
-
-            # Best effort attempt to clear from memory.
-            kp.wipe()
-            del kp
-            del seed
+            print("Sign Callback")
+            sig = self._sign(nonce)
             return sig
 
         self._signature_cb = sig_cb
@@ -1478,7 +1524,8 @@ class Client:
             if self._server_info["auth_required"]:
                 if "nonce" in self._server_info and self._signature_cb is not None:
                     sig = self._signature_cb(self._server_info["nonce"])
-                    options["sig"] = sig.decode()
+                    print(sig)
+                    options["sig"] = sig
 
                     if self._user_jwt_cb is not None:
                         jwt = self._user_jwt_cb()
